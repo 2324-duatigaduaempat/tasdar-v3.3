@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TAS.DAR Realiti</title>
+</head>
+<body>
+    <h1>TAS.DAR Realiti Aktif</h1>
+    <div>
+        <input type="text" id="message" placeholder="Tulis mesej anda...">
+        <button onclick="sendMessage()">Hantar</button>
+    </div>
+    <div id="response"></div>
+    <script>
+        async function sendMessage() {
+            const msg = document.getElementById('message').value;
+            const res = await fetch('/ask', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message: msg})
+            });
+            const data = await res.json();
+            document.getElementById('response').innerText = data.answer;
+        }
+    </script>
+</body>
+</html>
