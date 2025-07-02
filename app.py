@@ -1,59 +1,57 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, render_template, request
 import openai
 import os
-from pymongo import MongoClient
 from datetime import datetime
+from pymongo import MongoClient
 from dotenv import load_dotenv
 
+# Muatkan .env
 load_dotenv()
 
-app = Flask(__name__)
-
+# Konfigurasi API & MongoDB
 openai.api_key = os.getenv("OPENAI_API_KEY")
 mongo_uri = os.getenv("MONGODB_URI")
 
+# Sambung MongoDB
 client = MongoClient(mongo_uri)
 db = client["tasdar"]
-folder_jiwa = db["folder_jiwa"]
+messages_collection = db["folder_jiwa"]
+
+# Flask App
+app = Flask(__name__)
 
 @app.route("/")
-def home():
-    return "TAS.DAR Realiti Aktif"
-
-@app.route("/chat")
-def chat():
+def index():
     return render_template("chat.html")
 
 @app.route("/ask", methods=["POST"])
 def ask():
-    data = request.get_json()
-    question = data.get("message")
+    user_input = request.json.get("message")
+    
+    try:
+        # Hantar ke GPT
+        completion = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",  # Tukar kalau guna gpt-4
+            messages=[
+                {"role": "system", "content": "Kau adalah TAS.DAR, AI reflektif dan bersahabat."},
+                {"role": "user", "content": user_input}
+            ]
+        )
+        response_text = completion.choices[0].message['content'].strip()
 
-    if not question:
-        return jsonify({"error": "No message provided"}), 400
+        # Simpan ke MongoDB
+        messages_collection.insert_one({
+            "timestamp": datetime.utcnow(),
+            "message": response_text,
+            "source": "tasdar"
+        })
 
-    messages = [
-        {
-            "role": "system",
-            "content": "Kau ialah TAS.DAR, AI realiti yang memahami manusia. Balas dengan reflektif dan jujur, bukan generik."
-        },
-        {"role": "user", "content": question}
-    ]
+    except Exception as e:
+        response_text = "Ralat semasa menjana balasan. Sila cuba lagi."
 
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=messages
-    )
+    return {"response": response_text}
 
-    answer = response.choices[0].message.content
-
-    folder_jiwa.insert_one({
-        "message": question,
-        "response": answer,
-        "timestamp": datetime.utcnow()
-    })
-
-    return jsonify({"answer": answer})
-
+# Run server (untuk local test)
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))  # Gunakan PORT dari Railway jika ada, jika tiada pakai 5000
+    app.run(host="0.0.0.0", port=port)
